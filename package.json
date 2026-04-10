@@ -13,7 +13,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/@modelcontextprotocol/sdk/**/*.js",
+      "node_modules/zod/**/*.js"
+    ]
   },
   "license": "MIT"
 }
