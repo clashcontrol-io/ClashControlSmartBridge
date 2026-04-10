@@ -22,19 +22,35 @@ The bridge maintains a local WebSocket connection to the ClashControl browser ex
 
 ## Quick Start
 
-### 1. Install (first time only)
+### 1. Download and run (first time only)
 
-Download the standalone executable for your platform from the [releases page](https://github.com/clashcontrol-io/ClashControlSmartBridge/releases) and run it once to install:
+Download the executable for your platform from the [releases page](https://github.com/clashcontrol-io/ClashControlSmartBridge/releases):
 
 - **Windows:** `clashcontrol-smart-bridge-win.exe`
 - **macOS:** `clashcontrol-smart-bridge-macos`
 - **Linux:** `clashcontrol-smart-bridge-linux`
 
-> After the first run, the bridge is installed and registered on your system. You can delete the downloaded installer file from your Downloads folder — it is no longer needed.
+Run it once from your Downloads folder. On first launch it automatically copies itself to a permanent location:
+
+| Platform | Install location |
+|---|---|
+| Windows | `%APPDATA%\ClashControl\` |
+| macOS | `~/Library/Application Support/ClashControl/` |
+| Linux | `~/.local/share/clashcontrol/` |
+
+Once installed, it relaunches from there automatically. You will see:
+
+```
+[Smart Bridge] Installed to: C:\Users\...\AppData\Roaming\ClashControl\clashcontrol-smart-bridge.exe
+[Smart Bridge] You can now delete the downloaded file from your Downloads folder.
+[Smart Bridge] Relaunching...
+```
+
+**You can now delete the downloaded file from your Downloads folder.**
 
 ### 2. Run the bridge
 
-On subsequent launches, start the bridge directly from where it was installed (not from the Downloads folder):
+On subsequent launches, run the bridge from its installed location (or add it to your startup programs):
 
 **Default mode** (REST + WebSocket — for ChatGPT and generic LLMs):
 
