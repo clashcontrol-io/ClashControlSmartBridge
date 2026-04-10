@@ -15,12 +15,14 @@
 //   } } }
 
 const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
+const VERSION = '0.1.1';
 const WS_PORT = 19802;
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const REQUEST_TIMEOUT = 15000;
@@ -71,6 +73,40 @@ function selfInstall() {
   }
 }
 
+// ── Update checker ────────────────────────────────────────────────
+
+let pendingUpdate = null; // { version, url } when a newer release exists
+
+function checkForUpdate() {
+  const options = {
+    hostname: 'api.github.com',
+    path: '/repos/clashcontrol-io/ClashControlSmartBridge/releases/latest',
+    headers: { 'User-Agent': 'clashcontrol-smart-bridge/' + VERSION }
+  };
+  https.get(options, (res) => {
+    let data = '';
+    res.on('data', (chunk) => { data += chunk; });
+    res.on('end', () => {
+      try {
+        const release = JSON.parse(data);
+        const latest = (release.tag_name || '').replace(/^v/, '');
+        if (latest && isNewerVersion(latest, VERSION)) {
+          pendingUpdate = { version: latest, url: release.html_url };
+          log('Update available: v' + latest + ' — ' + release.html_url);
+        }
+      } catch (e) {}
+    });
+  }).on('error', () => {});
+}
+
+function isNewerVersion(latest, current) {
+  const [lMaj, lMin, lPat] = latest.split('.').map(Number);
+  const [cMaj, cMin, cPat] = current.split('.').map(Number);
+  if (lMaj !== cMaj) return lMaj > cMaj;
+  if (lMin !== cMin) return lMin > cMin;
+  return lPat > cPat;
+}
+
 // ── WebSocket bridge to browser ───────────────────────────────────
 
 let wss = null;
@@ -83,6 +119,9 @@ function startWsBridge() {
   wss.on('connection', (ws) => {
     browserSocket = ws;
     log('Browser connected via WebSocket');
+    if (pendingUpdate) {
+      ws.send(JSON.stringify({ type: 'update_available', version: pendingUpdate.version, url: pendingUpdate.url }));
+    }
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
@@ -280,7 +319,7 @@ async function startMcpServer() {
   const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
   const { z } = require('zod');
 
-  const mcp = new McpServer({ name: 'ClashControl', version: '0.1.0' });
+  const mcp = new McpServer({ name: 'ClashControl', version: VERSION });
 
   // Register all tools from the shared TOOLS definition
   for (const [name, tool] of Object.entries(TOOLS)) {
@@ -313,6 +352,7 @@ async function startMcpServer() {
 
 async function main() {
   selfInstall();
+  checkForUpdate();
 
   startWsBridge();
   log('WebSocket:  ws://127.0.0.1:' + WS_PORT);
