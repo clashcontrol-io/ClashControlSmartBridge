@@ -22,34 +22,30 @@ The bridge maintains a local WebSocket connection to the ClashControl browser ex
 
 ## Quick Start
 
-### 1. Install
+### 1. Install (first time only)
 
-```bash
-npm install -g @clashcontrol/mcp-server
-```
+Download the standalone executable for your platform from the [releases page](https://github.com/clashcontrol-io/ClashControlSmartBridge/releases) and run it once to install:
 
-Or clone and install locally:
+- **Windows:** `clashcontrol-smart-bridge-win.exe`
+- **macOS:** `clashcontrol-smart-bridge-macos`
+- **Linux:** `clashcontrol-smart-bridge-linux`
 
-```bash
-git clone https://github.com/clashcontrol-io/ClashControlSmartBridge.git
-cd ClashControlSmartBridge
-npm install
-```
+> After the first run, the bridge is installed and registered on your system. You can delete the downloaded installer file from your Downloads folder — it is no longer needed.
 
 ### 2. Run the bridge
+
+On subsequent launches, start the bridge directly from where it was installed (not from the Downloads folder):
 
 **Default mode** (REST + WebSocket — for ChatGPT and generic LLMs):
 
 ```bash
 clashcontrol-smart-bridge
-# or: npm start
 ```
 
 **MCP mode** (for Claude Desktop / Claude Code):
 
 ```bash
 clashcontrol-smart-bridge --mcp
-# or: npm run mcp
 ```
 
 ### 3. Connect ClashControl
