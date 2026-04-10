@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build binaries
+        run: npx pkg smart-bridge.js --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --output dist/clashcontrol-smart-bridge
+
+      - name: Rename binaries
+        run: |
+          mv dist/clashcontrol-smart-bridge-win.exe dist/clashcontrol-smart-bridge-win.exe
+          mv dist/clashcontrol-smart-bridge-macos   dist/clashcontrol-smart-bridge-macos
+          mv dist/clashcontrol-smart-bridge-linux   dist/clashcontrol-smart-bridge-linux
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/clashcontrol-smart-bridge-win.exe
+            dist/clashcontrol-smart-bridge-macos
+            dist/clashcontrol-smart-bridge-linux
+          generate_release_notes: true
