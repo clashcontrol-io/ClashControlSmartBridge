@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.pkg.outputs.version }}" | grep -q .; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.tag_check.outputs.exists == 'false'
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npm install
+
+      - name: Build binaries
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npx pkg smart-bridge.js --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --output dist/clashcontrol-smart-bridge
+
+      - name: Create tag and release
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.version }}
+          files: |
+            dist/clashcontrol-smart-bridge-win.exe
+            dist/clashcontrol-smart-bridge-macos
+            dist/clashcontrol-smart-bridge-linux
+          generate_release_notes: true
