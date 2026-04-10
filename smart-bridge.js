@@ -16,11 +16,60 @@
 
 const http = require('http');
 const WebSocket = require('ws');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
 
 const WS_PORT = 19802;
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const REQUEST_TIMEOUT = 15000;
 const MCP_MODE = process.argv.includes('--mcp');
+
+// ── Self-installer ────────────────────────────────────────────────
+// When running as a compiled binary (pkg), copy to a permanent location
+// on first launch so the downloaded installer file can be deleted.
+
+function getInstallPath() {
+  const ext = process.platform === 'win32' ? '.exe' : '';
+  const name = 'clashcontrol-smart-bridge' + ext;
+  if (process.platform === 'win32')
+    return path.join(process.env.APPDATA || os.homedir(), 'ClashControl', name);
+  if (process.platform === 'darwin')
+    return path.join(os.homedir(), 'Library', 'Application Support', 'ClashControl', name);
+  return path.join(os.homedir(), '.local', 'share', 'clashcontrol', name);
+}
+
+function selfInstall() {
+  // Only applies to compiled pkg binaries, not `node smart-bridge.js`
+  if (!process.pkg) return;
+
+  const src = process.execPath;
+  const dest = getInstallPath();
+
+  // Already running from the install location — nothing to do
+  if (path.normalize(src) === path.normalize(dest)) return;
+
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+    if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+
+    process.stdout.write('[Smart Bridge] Installed to: ' + dest + '\n');
+    process.stdout.write('[Smart Bridge] You can now delete the downloaded file from your Downloads folder.\n');
+    process.stdout.write('[Smart Bridge] Relaunching...\n\n');
+
+    const child = spawn(dest, process.argv.slice(2), {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    child.unref();
+    process.exit(0);
+  } catch (e) {
+    process.stdout.write('[Smart Bridge] Could not install to ' + dest + ': ' + e.message + ' — running from current location.\n');
+  }
+}
 
 // ── WebSocket bridge to browser ───────────────────────────────────
 
@@ -263,6 +312,8 @@ async function startMcpServer() {
 // ── Main ──────────────────────────────────────────────────────────
 
 async function main() {
+  selfInstall();
+
   startWsBridge();
   log('WebSocket:  ws://127.0.0.1:' + WS_PORT);
 
