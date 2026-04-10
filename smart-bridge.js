@@ -107,6 +107,8 @@ function downloadFile(url, dest) {
   });
 }
 
+let pendingUpdate = null; // { version, url, downloadUrl } when a newer release exists
+
 function notifyBrowser(msg) {
   if (browserSocket && browserSocket.readyState === WebSocket.OPEN)
     browserSocket.send(JSON.stringify(msg));
@@ -136,15 +138,24 @@ async function checkAndUpdate() {
   const latest = (release.tag_name || '').replace(/^v/, '');
   if (!latest || !isNewerVersion(latest, VERSION)) return;
 
-  log('Update available: v' + latest + ' — downloading...');
-  notifyBrowser({ type: 'update_downloading', version: latest });
-
   const asset = (release.assets || []).find(a => a.name === getAssetName());
   if (!asset) { log('Update asset not found: ' + getAssetName()); return; }
 
+  // Cache the available update for GET /update
+  pendingUpdate = { version: latest, url: release.html_url, downloadUrl: asset.browser_download_url };
+  log('Update available: v' + latest);
+}
+
+async function applyUpdate() {
+  if (!pendingUpdate) return;
+  const { version, downloadUrl } = pendingUpdate;
+
+  log('Downloading update v' + version + '...');
+  notifyBrowser({ type: 'update_downloading', version });
+
   const tmpPath = process.execPath + '.tmp';
   try {
-    await downloadFile(asset.browser_download_url, tmpPath);
+    await downloadFile(downloadUrl, tmpPath);
     if (process.platform !== 'win32') fs.chmodSync(tmpPath, 0o755);
 
     // Windows: rename running exe to .old (can't delete while running), place new binary
@@ -152,8 +163,8 @@ async function checkAndUpdate() {
     if (process.platform === 'win32') fs.renameSync(process.execPath, process.execPath + '.old');
     fs.renameSync(tmpPath, process.execPath);
 
-    log('Updated to v' + latest + ' — relaunching...');
-    notifyBrowser({ type: 'update_installed', version: latest });
+    log('Updated to v' + version + ' — relaunching...');
+    notifyBrowser({ type: 'update_installed', version });
 
     setTimeout(() => {
       const child = spawn(process.execPath, process.argv.slice(2), { detached: true, stdio: 'ignore', windowsHide: true });
@@ -332,6 +343,18 @@ function startRestServer() {
     }
     if (path === '/tools' && req.method === 'GET') { json(200, { tools: TOOLS }); return; }
     if (path === '/openapi.json' && req.method === 'GET') { json(200, generateOpenAPISpec()); return; }
+
+    if (path === '/update' && req.method === 'GET') {
+      if (pendingUpdate) json(200, { update_available: true, version: pendingUpdate.version, url: pendingUpdate.url });
+      else json(200, { update_available: false });
+      return;
+    }
+    if (path === '/update' && req.method === 'POST') {
+      if (!pendingUpdate) { json(200, { update_available: false }); return; }
+      json(200, { ok: true });
+      applyUpdate();
+      return;
+    }
 
     const m = path.match(/^\/call\/([a-z_]+)$/);
     if (m && req.method === 'POST') {
