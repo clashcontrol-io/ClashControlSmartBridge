@@ -389,6 +389,10 @@ function startRestServer() {
     log('REST API:  http://127.0.0.1:' + REST_PORT);
     log('OpenAPI:   http://127.0.0.1:' + REST_PORT + '/openapi.json');
   });
+  srv.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') log('REST port ' + REST_PORT + ' in use — another instance is already running.');
+    else log('REST server error: ' + err.message);
+  });
 }
 
 // ── MCP Server (Claude Desktop) ──────────────────────────────────
