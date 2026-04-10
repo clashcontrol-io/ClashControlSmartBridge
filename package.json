@@ -1,6 +1,6 @@
 {
   "name": "@clashcontrol/mcp-server",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "ClashControl Smart Bridge — LLM bridge connecting Claude, ChatGPT, or any AI assistant to BIM clash detection",
   "main": "smart-bridge.js",
   "bin": {
