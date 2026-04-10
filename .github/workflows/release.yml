@@ -51,3 +51,4 @@ jobs:
             dist/clashcontrol-smart-bridge-macos
             dist/clashcontrol-smart-bridge-linux
           generate_release_notes: true
+# Build timestamp: Fri Apr 10 22:08:43 UTC 2026
