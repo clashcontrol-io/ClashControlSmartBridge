@@ -22,7 +22,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const VERSION = '0.1.1';
+const VERSION = require('./package.json').version;
 const WS_PORT = 19802;
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const REQUEST_TIMEOUT = 15000;
