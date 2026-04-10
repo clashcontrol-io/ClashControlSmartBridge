@@ -73,30 +73,13 @@ function selfInstall() {
   }
 }
 
-// ── Update checker ────────────────────────────────────────────────
+// ── Auto-updater ──────────────────────────────────────────────────
+// Only active when running as a compiled pkg binary.
 
-let pendingUpdate = null; // { version, url } when a newer release exists
-
-function checkForUpdate() {
-  const options = {
-    hostname: 'api.github.com',
-    path: '/repos/clashcontrol-io/ClashControlSmartBridge/releases/latest',
-    headers: { 'User-Agent': 'clashcontrol-smart-bridge/' + VERSION }
-  };
-  https.get(options, (res) => {
-    let data = '';
-    res.on('data', (chunk) => { data += chunk; });
-    res.on('end', () => {
-      try {
-        const release = JSON.parse(data);
-        const latest = (release.tag_name || '').replace(/^v/, '');
-        if (latest && isNewerVersion(latest, VERSION)) {
-          pendingUpdate = { version: latest, url: release.html_url };
-          log('Update available: v' + latest + ' — ' + release.html_url);
-        }
-      } catch (e) {}
-    });
-  }).on('error', () => {});
+function getAssetName() {
+  if (process.platform === 'win32') return 'clashcontrol-smart-bridge-win.exe';
+  if (process.platform === 'darwin') return 'clashcontrol-smart-bridge-macos';
+  return 'clashcontrol-smart-bridge-linux';
 }
 
 function isNewerVersion(latest, current) {
@@ -105,6 +88,82 @@ function isNewerVersion(latest, current) {
   if (lMaj !== cMaj) return lMaj > cMaj;
   if (lMin !== cMin) return lMin > cMin;
   return lPat > cPat;
+}
+
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const follow = (u) => {
+      const mod = u.startsWith('https') ? https : http;
+      mod.get(u, { headers: { 'User-Agent': 'clashcontrol-smart-bridge/' + VERSION } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) { follow(res.headers.location); return; }
+        if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
+        const file = fs.createWriteStream(dest);
+        res.pipe(file);
+        file.on('finish', () => file.close(resolve));
+        file.on('error', reject);
+      }).on('error', reject);
+    };
+    follow(url);
+  });
+}
+
+function notifyBrowser(msg) {
+  if (browserSocket && browserSocket.readyState === WebSocket.OPEN)
+    browserSocket.send(JSON.stringify(msg));
+}
+
+async function checkAndUpdate() {
+  if (!process.pkg) return; // only for compiled binaries
+
+  // Clean up leftover .old file from previous update (Windows)
+  try { fs.unlinkSync(process.execPath + '.old'); } catch (e) {}
+
+  let release;
+  try {
+    release = await new Promise((resolve, reject) => {
+      https.get({
+        hostname: 'api.github.com',
+        path: '/repos/clashcontrol-io/ClashControlSmartBridge/releases/latest',
+        headers: { 'User-Agent': 'clashcontrol-smart-bridge/' + VERSION }
+      }, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
+      }).on('error', reject);
+    });
+  } catch (e) { return; } // silently skip if offline
+
+  const latest = (release.tag_name || '').replace(/^v/, '');
+  if (!latest || !isNewerVersion(latest, VERSION)) return;
+
+  log('Update available: v' + latest + ' — downloading...');
+  notifyBrowser({ type: 'update_downloading', version: latest });
+
+  const asset = (release.assets || []).find(a => a.name === getAssetName());
+  if (!asset) { log('Update asset not found: ' + getAssetName()); return; }
+
+  const tmpPath = process.execPath + '.tmp';
+  try {
+    await downloadFile(asset.browser_download_url, tmpPath);
+    if (process.platform !== 'win32') fs.chmodSync(tmpPath, 0o755);
+
+    // Windows: rename running exe to .old (can't delete while running), place new binary
+    // Unix: overwrite directly (OS holds old inode in memory until process exits)
+    if (process.platform === 'win32') fs.renameSync(process.execPath, process.execPath + '.old');
+    fs.renameSync(tmpPath, process.execPath);
+
+    log('Updated to v' + latest + ' — relaunching...');
+    notifyBrowser({ type: 'update_installed', version: latest });
+
+    setTimeout(() => {
+      const child = spawn(process.execPath, process.argv.slice(2), { detached: true, stdio: 'ignore', windowsHide: true });
+      child.unref();
+      process.exit(0);
+    }, 500); // brief delay so the browser receives the notification
+  } catch (e) {
+    log('Auto-update failed: ' + e.message);
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
 }
 
 // ── WebSocket bridge to browser ───────────────────────────────────
@@ -119,9 +178,6 @@ function startWsBridge() {
   wss.on('connection', (ws) => {
     browserSocket = ws;
     log('Browser connected via WebSocket');
-    if (pendingUpdate) {
-      ws.send(JSON.stringify({ type: 'update_available', version: pendingUpdate.version, url: pendingUpdate.url }));
-    }
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
@@ -352,7 +408,7 @@ async function startMcpServer() {
 
 async function main() {
   selfInstall();
-  checkForUpdate();
+  checkAndUpdate();
 
   startWsBridge();
   log('WebSocket:  ws://127.0.0.1:' + WS_PORT);
