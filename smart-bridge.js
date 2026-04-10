@@ -59,7 +59,11 @@ function selfInstall() {
     process.stdout.write('[Smart Bridge] You can now delete the downloaded file from your Downloads folder.\n');
     process.stdout.write('[Smart Bridge] Relaunching...\n\n');
 
-    const child = spawn(dest, process.argv.slice(2), { detached: true, stdio: 'inherit' });
+    const child = spawn(dest, process.argv.slice(2), {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    });
     child.unref();
     process.exit(0);
   } catch (e) {
