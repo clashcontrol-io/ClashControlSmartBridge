@@ -27,5 +27,5 @@ jobs:
           npm version patch --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           git add package.json
-          git commit -m "chore: bump version to v$VERSION [skip ci]"
+          git commit -m "chore: bump version to v$VERSION"
           git push origin main
