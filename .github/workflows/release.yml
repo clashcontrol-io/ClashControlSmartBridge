@@ -41,6 +41,15 @@ jobs:
         if: steps.tag_check.outputs.exists == 'false'
         run: npx pkg smart-bridge.js --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --output dist/clashcontrol-smart-bridge
 
+      - name: Build .mcpb Desktop Extension
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          npx esbuild index.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/mcp-bundle.cjs
+          mkdir -p staging/server
+          cp manifest.json staging/
+          cp dist/mcp-bundle.cjs staging/server/index.js
+          cd staging && zip -r ../dist/clashcontrol-mcp.mcpb . && cd ..
+
       - name: Create tag and release
         if: steps.tag_check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -50,5 +59,6 @@ jobs:
             dist/clashcontrol-smart-bridge-win.exe
             dist/clashcontrol-smart-bridge-macos
             dist/clashcontrol-smart-bridge-linux
+            dist/clashcontrol-mcp.mcpb
           generate_release_notes: true
 # Build timestamp: Fri Apr 10 22:08:43 UTC 2026
