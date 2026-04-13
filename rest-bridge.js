@@ -107,132 +107,132 @@ function sendToBrowser(action, params) {
 
 const TOOLS = {
   get_status: {
-    description: 'Get current state: loaded models, clash count, active project, detection rules.',
+    description: 'Get current state of ClashControl: loaded IFC models, clash count, active project, and detection rules.',
     params: {}
   },
   get_clashes: {
-    description: 'Get the clash list with details.',
+    description: 'Get detected clash pairs between IFC elements with type, storey, status, priority, and element details.',
     params: {
-      status: { type: 'string', enum: ['open', 'resolved', 'all'], description: 'Filter by status' },
+      status: { type: 'string', enum: ['open', 'resolved', 'all'], description: 'Filter by resolution status (default: open)' },
       limit: { type: 'number', description: 'Max clashes to return (default 50)' }
     }
   },
   get_issues: {
-    description: 'Get the issues list.',
+    description: 'Get manually created coordination issues (distinct from auto-detected clashes).',
     params: {
       limit: { type: 'number', description: 'Max issues to return (default 50)' }
     }
   },
   run_detection: {
-    description: 'Run clash detection between model groups.',
+    description: 'Run clash detection between two sets of IFC model elements. Hard mode = physical intersections, soft mode = clearance violations.',
     params: {
-      modelA: { type: 'string', description: 'First side: model name, discipline, or "all". Use "+" for groups.', required: true },
+      modelA: { type: 'string', description: 'First side: model name, discipline, or "all". Use "+" for groups (e.g. "structural + architectural").', required: true },
       modelB: { type: 'string', description: 'Second side: model name, discipline, or "all".', required: true },
-      maxGap: { type: 'number', description: 'Gap tolerance in mm (default 10)' },
-      hard: { type: 'boolean', description: 'Hard/intersection clashes' },
-      excludeSelf: { type: 'boolean', description: 'Exclude self-clashes' }
+      maxGap: { type: 'number', description: 'Gap tolerance in mm (default 10). Elements closer than this trigger a soft clash.' },
+      hard: { type: 'boolean', description: 'true = hard/intersection clashes only, false = soft/clearance violations' },
+      excludeSelf: { type: 'boolean', description: 'Skip clashes between elements within the same model' }
     }
   },
   set_detection_rules: {
-    description: 'Update detection settings without running.',
+    description: 'Update clash detection settings (gap tolerance, hard/soft mode) without running detection.',
     params: {
       maxGap: { type: 'number', description: 'Gap tolerance in mm' },
-      hard: { type: 'boolean', description: 'Hard clash mode' },
-      excludeSelf: { type: 'boolean', description: 'Exclude self-clashes' },
-      duplicates: { type: 'boolean', description: 'Include duplicates' }
+      hard: { type: 'boolean', description: 'true for hard/intersection mode, false for soft/clearance mode' },
+      excludeSelf: { type: 'boolean', description: 'Exclude self-clashes within same model' },
+      duplicates: { type: 'boolean', description: 'Include duplicate clash pairs' }
     }
   },
   update_clash: {
-    description: 'Update a specific clash.',
+    description: 'Update a single clash: change status, priority, assignee, or title.',
     params: {
-      clashIndex: { type: 'number', description: 'Clash index (0-based)', required: true },
-      status: { type: 'string', enum: ['open', 'resolved'] },
-      priority: { type: 'string', enum: ['critical', 'high', 'normal', 'low'] },
-      assignee: { type: 'string' },
-      title: { type: 'string' }
+      clashIndex: { type: 'number', description: 'Zero-based index of the clash in the current list', required: true },
+      status: { type: 'string', enum: ['open', 'resolved'], description: 'Resolution status' },
+      priority: { type: 'string', enum: ['critical', 'high', 'normal', 'low'], description: 'Priority level' },
+      assignee: { type: 'string', description: 'Person or team responsible' },
+      title: { type: 'string', description: 'Short descriptive label' }
     }
   },
   batch_update_clashes: {
-    description: 'Bulk update clashes.',
+    description: 'Bulk update multiple clashes by filter. Can mass-resolve duplicates, set priority on all hard clashes, etc.',
     params: {
-      action: { type: 'string', enum: ['resolve', 'set_priority', 'set_status'], required: true },
-      filter: { type: 'string', enum: ['duplicates', 'soft', 'hard', 'all'], required: true },
-      value: { type: 'string' }
+      action: { type: 'string', enum: ['resolve', 'set_priority', 'set_status'], description: 'Bulk action to perform', required: true },
+      filter: { type: 'string', enum: ['duplicates', 'soft', 'hard', 'all'], description: 'Which clashes to target', required: true },
+      value: { type: 'string', description: 'Value for the action (e.g. priority level)' }
     }
   },
   set_view: {
-    description: 'Set camera to a preset angle.',
-    params: { view: { type: 'string', enum: ['top', 'front', 'back', 'left', 'right', 'isometric', 'reset'], required: true } }
+    description: 'Set the 3D camera to a preset viewing angle.',
+    params: { view: { type: 'string', enum: ['top', 'front', 'back', 'left', 'right', 'isometric', 'reset'], description: 'Camera preset', required: true } }
   },
   set_render_style: {
-    description: 'Change 3D rendering style.',
-    params: { style: { type: 'string', enum: ['wireframe', 'shaded', 'rendered', 'standard'], required: true } }
+    description: 'Change 3D rendering: wireframe (see-through), shaded, rendered (full materials), or standard.',
+    params: { style: { type: 'string', enum: ['wireframe', 'shaded', 'rendered', 'standard'], description: 'Rendering mode', required: true } }
   },
   set_section: {
-    description: 'Add or clear a section cut plane.',
-    params: { axis: { type: 'string', enum: ['x', 'y', 'z', 'none'], required: true } }
+    description: 'Apply a section cut plane to slice through the model, or remove it with "none".',
+    params: { axis: { type: 'string', enum: ['x', 'y', 'z', 'none'], description: 'Cut axis or "none" to clear', required: true } }
   },
   color_by: {
-    description: 'Color elements by property.',
-    params: { by: { type: 'string', enum: ['type', 'storey', 'discipline', 'material', 'none'], required: true } }
+    description: 'Color-code model elements by type (IFC class), storey, discipline, material, or reset with "none".',
+    params: { by: { type: 'string', enum: ['type', 'storey', 'discipline', 'material', 'none'], description: 'Color grouping', required: true } }
   },
   set_theme: {
-    description: 'Switch UI theme.',
+    description: 'Switch ClashControl UI between dark and light theme.',
     params: { theme: { type: 'string', enum: ['dark', 'light'], required: true } }
   },
   set_visibility: {
-    description: 'Show or hide UI overlays.',
+    description: 'Toggle visibility of 3D viewport overlays: grid, axes, or clash markers.',
     params: {
-      option: { type: 'string', enum: ['grid', 'axes', 'markers'], required: true },
-      visible: { type: 'boolean', required: true }
+      option: { type: 'string', enum: ['grid', 'axes', 'markers'], description: 'Overlay to toggle', required: true },
+      visible: { type: 'boolean', description: 'true to show, false to hide', required: true }
     }
   },
   restore_visibility: {
-    description: 'Restore all hidden/ghosted/isolated elements.',
+    description: 'Restore all hidden, ghosted, or isolated elements back to full visibility.',
     params: {}
   },
   fly_to_clash: {
-    description: 'Fly camera to a clash.',
-    params: { clashIndex: { type: 'number', required: true } }
+    description: 'Fly the 3D camera to focus on a specific clash by index.',
+    params: { clashIndex: { type: 'number', description: 'Zero-based clash index', required: true } }
   },
   navigate_tab: {
-    description: 'Switch to a UI tab.',
+    description: 'Switch the ClashControl sidebar to a tab: models, clashes, issues, navigator, or ai.',
     params: { tab: { type: 'string', enum: ['models', 'clashes', 'issues', 'navigator', 'ai'], required: true } }
   },
   filter_clashes: {
-    description: 'Filter the clash list.',
+    description: 'Filter the displayed clash list by status and/or priority (UI only, does not modify data).',
     params: {
-      status: { type: 'string', enum: ['open', 'resolved', 'all'] },
-      priority: { type: 'string', enum: ['critical', 'high', 'normal', 'low', 'all'] }
+      status: { type: 'string', enum: ['open', 'resolved', 'all'], description: 'Filter by resolution status' },
+      priority: { type: 'string', enum: ['critical', 'high', 'normal', 'low', 'all'], description: 'Filter by priority level' }
     }
   },
   sort_clashes: {
-    description: 'Sort the clash list.',
-    params: { sortBy: { type: 'string', enum: ['priority', 'status', 'type', 'storey', 'date', 'distance'], required: true } }
+    description: 'Sort the clash list by priority, status, type, storey, date, or distance.',
+    params: { sortBy: { type: 'string', enum: ['priority', 'status', 'type', 'storey', 'date', 'distance'], description: 'Sort property', required: true } }
   },
   group_clashes: {
-    description: 'Group clashes by category.',
-    params: { groupBy: { type: 'string', enum: ['storey', 'discipline', 'status', 'type', 'none'], required: true } }
+    description: 'Group clashes by category to identify patterns (e.g. discipline pairs with most conflicts).',
+    params: { groupBy: { type: 'string', enum: ['storey', 'discipline', 'status', 'type', 'none'], description: 'Grouping category', required: true } }
   },
   export_bcf: {
-    description: 'Export clashes/issues as BCF (triggers download in browser).',
-    params: { version: { type: 'string', enum: ['2.1', '3.0'] } }
+    description: 'Export clashes/issues as a BCF file for import into Revit, Navisworks, Solibri, etc.',
+    params: { version: { type: 'string', enum: ['2.1', '3.0'], description: 'BCF version (2.1 = widest compatibility)' } }
   },
   create_project: {
-    description: 'Create a new project.',
-    params: { name: { type: 'string', required: true } }
+    description: 'Create a new ClashControl project for organizing clash detection sessions.',
+    params: { name: { type: 'string', description: 'Project name', required: true } }
   },
   switch_project: {
-    description: 'Switch to a project by name.',
-    params: { name: { type: 'string', required: true } }
+    description: 'Switch to an existing project, loading its models, clashes, and settings.',
+    params: { name: { type: 'string', description: 'Project name or substring to match', required: true } }
   },
   measure: {
-    description: 'Start or stop measurement mode.',
-    params: { mode: { type: 'string', enum: ['length', 'angle', 'area', 'stop', 'clear'], required: true } }
+    description: 'Activate measurement mode: length, angle, or area. Use "stop" to exit, "clear" to remove annotations.',
+    params: { mode: { type: 'string', enum: ['length', 'angle', 'area', 'stop', 'clear'], description: 'Measurement type or control', required: true } }
   },
   walk_mode: {
-    description: 'Enter or exit first-person walk mode.',
-    params: { enabled: { type: 'boolean', required: true } }
+    description: 'Enter or exit first-person walk mode for human-scale building navigation.',
+    params: { enabled: { type: 'boolean', description: 'true to enter, false to exit', required: true } }
   }
 };
 
