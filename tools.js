@@ -219,4 +219,101 @@ function registerMcpTools(mcp, z, sendToBrowser) {
   }
 }
 
-module.exports = { TOOLS, MCP_INSTRUCTIONS, registerMcpTools };
+// ── MCP Resources ────────────────────────────────────────────────
+
+function registerMcpResources(mcp, sendToBrowser) {
+  mcp.registerResource('status', 'clashcontrol://status', {
+    description: 'Current ClashControl state: loaded IFC models, clash count, active project, detection rules, browser connection status.',
+    mimeType: 'application/json'
+  }, async (uri) => {
+    try {
+      const result = await sendToBrowser('get_status', {});
+      return { contents: [{ uri: uri.href, mimeType: 'application/json', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify({ error: e.message, connected: false }) }] };
+    }
+  });
+
+  mcp.registerResource('clash-summary', 'clashcontrol://clash-summary', {
+    description: 'High-level clash summary: total counts by status, type, and priority.',
+    mimeType: 'application/json'
+  }, async (uri) => {
+    try {
+      const result = await sendToBrowser('get_clashes', { status: 'all', limit: 500 });
+      const clashes = Array.isArray(result) ? result : (result && result.clashes) || [];
+      const summary = { total: clashes.length, byStatus: {}, byType: {}, byPriority: {} };
+      for (const c of clashes) {
+        if (c.status) summary.byStatus[c.status] = (summary.byStatus[c.status] || 0) + 1;
+        if (c.type) summary.byType[c.type] = (summary.byType[c.type] || 0) + 1;
+        if (c.priority) summary.byPriority[c.priority] = (summary.byPriority[c.priority] || 0) + 1;
+      }
+      return { contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(summary, null, 2) }] };
+    } catch (e) {
+      return { contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify({ error: e.message }) }] };
+    }
+  });
+}
+
+// ── MCP Prompts ──────────────────────────────────────────────────
+
+function registerMcpPrompts(mcp, z) {
+  mcp.registerPrompt('analyze-clash-report', {
+    description: 'Systematic analysis of current clash detection results with triage recommendations.'
+  }, async () => ({
+    messages: [{ role: 'user', content: { type: 'text', text:
+      'Analyze the current BIM clash detection results in ClashControl:\n\n' +
+      '1. Call get_status to confirm which IFC models are loaded and current detection settings.\n' +
+      '2. Call get_clashes with status "all" to retrieve the full clash list.\n' +
+      '3. Summarize: total clashes, breakdown by status (open vs resolved), by type (hard vs soft), by priority, and by discipline pairs.\n' +
+      '4. Identify patterns: clashes concentrated on specific storeys? Between specific disciplines? Clusters of duplicates?\n' +
+      '5. Recommend a triage strategy: which clashes to address first, which might be false positives, and which discipline teams should coordinate.\n' +
+      '6. If there are many duplicates, suggest using batch_update_clashes to resolve them before manual review.'
+    }}]
+  }));
+
+  mcp.registerPrompt('investigate-clash', {
+    description: 'Deep-dive investigation of a specific clash with visual inspection and resolution advice.',
+    argsSchema: { clashIndex: z.string().describe('Zero-based index of the clash to investigate') }
+  }, async ({ clashIndex }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text:
+      'Investigate clash #' + clashIndex + ' in ClashControl:\n\n' +
+      '1. Call fly_to_clash with clashIndex ' + clashIndex + ' to navigate the 3D view to this clash.\n' +
+      '2. Call get_clashes to get details about this clash (elements involved, type, distance, storey).\n' +
+      '3. Try different viewing angles: set_view with "front", "top", and "isometric".\n' +
+      '4. If elements are hard to see, try set_render_style with "wireframe" or color_by with "discipline".\n' +
+      '5. Explain what the two clashing elements are, why they might be colliding, and whether this is a real coordination issue or a modeling artifact.\n' +
+      '6. Suggest a resolution: flag as critical, assign to a discipline team, or resolve as false positive.'
+    }}]
+  }));
+
+  mcp.registerPrompt('coordination-review', {
+    description: 'Discipline coordination checklist for BIM review meetings.',
+    argsSchema: { discipline: z.string().describe('Primary discipline to review, e.g. "structural", "mechanical", "electrical", "plumbing"') }
+  }, async ({ discipline }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text:
+      'Run a coordination review for the ' + discipline + ' discipline:\n\n' +
+      '1. Call get_status to see which models and disciplines are loaded.\n' +
+      '2. Call get_clashes to find all clashes involving ' + discipline + ' elements.\n' +
+      '3. Use group_clashes with "discipline" to see which other disciplines clash most with ' + discipline + '.\n' +
+      '4. For each discipline pair, summarize: clash count, types (hard vs soft), affected storeys, severity.\n' +
+      '5. Identify the top 3 most critical coordination issues needing team discussion.\n' +
+      '6. Provide a checklist of action items for the ' + discipline + ' coordination lead.'
+    }}]
+  }));
+
+  mcp.registerPrompt('compare-clash-runs', {
+    description: 'Compare current clash results to track coordination progress over time.'
+  }, async () => ({
+    messages: [{ role: 'user', content: { type: 'text', text:
+      'Compare clash detection results to track coordination progress:\n\n' +
+      '1. Call get_status to see the current project and detection settings.\n' +
+      '2. Call get_clashes with status "all" to get the complete clash list.\n' +
+      '3. Summarize: total clashes, open vs resolved, by type and priority.\n' +
+      '4. Compute the resolution rate: what percentage of clashes are resolved?\n' +
+      '5. Identify new open clashes with high/critical priority — these need immediate attention.\n' +
+      '6. Produce a progress report for a BIM coordination meeting: overall trend, improvements, remaining problem areas, recommended next steps.'
+    }}]
+  }));
+}
+
+module.exports = { TOOLS, MCP_INSTRUCTIONS, registerMcpTools, registerMcpResources, registerMcpPrompts };
