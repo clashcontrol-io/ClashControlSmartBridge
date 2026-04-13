@@ -21,6 +21,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const { z } = require('zod');
 
 const VERSION = require('./package.json').version;
 const WS_PORT = 19802;
@@ -427,10 +430,6 @@ function startRestServer() {
 // ── MCP Server (Claude Desktop) ──────────────────────────────────
 
 async function startMcpServer() {
-  const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
-  const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-  const { z } = require('zod');
-
   const mcp = new McpServer({ name: 'ClashControl', version: VERSION }, { instructions: MCP_INSTRUCTIONS });
 
   registerMcpTools(mcp, z, sendToBrowser);
