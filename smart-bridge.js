@@ -95,9 +95,9 @@ function configureClaude() {
     command = getInstallPath();
     args = ['--mcp'];
   } else {
-    // Running via node — use npx so it works without knowing the script path
-    command = 'npx';
-    args = ['-y', '@clashcontrol/mcp-server'];
+    // Running via node — use node + absolute path to this script
+    command = process.execPath;
+    args = [path.resolve(__dirname, 'smart-bridge.js'), '--mcp'];
   }
 
   let config = {};
