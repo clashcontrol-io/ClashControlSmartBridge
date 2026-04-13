@@ -12,7 +12,7 @@
   "repository": "https://github.com/clashcontrol-io/ClashControlSmartBridge",
   "server": {
     "type": "node",
-    "entry_point": "dist/mcp-bundle.cjs"
+    "entry_point": "server/index.js"
   },
   "compatibility": {
     "platforms": ["darwin", "win32"],
