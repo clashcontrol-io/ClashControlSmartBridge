@@ -259,33 +259,7 @@ function log(msg) {
 }
 
 // ── Tool definitions (shared by REST and MCP) ─────────────────────
-
-const TOOLS = {
-  get_status:          { desc: 'Get current state: loaded models, clash count, active project, detection rules.', params: {} },
-  get_clashes:         { desc: 'Get the clash list with details.', params: { status: {t:'string',e:['open','resolved','all']}, limit: {t:'number'} } },
-  get_issues:          { desc: 'Get the issues list.', params: { limit: {t:'number'} } },
-  run_detection:       { desc: 'Run clash detection between model groups.', params: { modelA: {t:'string',r:1,d:'First side: model name, discipline, or "all". Use "+" for groups.'}, modelB: {t:'string',r:1,d:'Second side'}, maxGap: {t:'number',d:'Gap mm'}, hard: {t:'boolean'}, excludeSelf: {t:'boolean'} } },
-  set_detection_rules: { desc: 'Update detection settings without running.', params: { maxGap: {t:'number'}, hard: {t:'boolean'}, excludeSelf: {t:'boolean'}, duplicates: {t:'boolean'} } },
-  update_clash:        { desc: 'Update a specific clash.', params: { clashIndex: {t:'number',r:1}, status: {t:'string',e:['open','resolved']}, priority: {t:'string',e:['critical','high','normal','low']}, assignee: {t:'string'}, title: {t:'string'} } },
-  batch_update_clashes:{ desc: 'Bulk update clashes.', params: { action: {t:'string',e:['resolve','set_priority','set_status'],r:1}, filter: {t:'string',e:['duplicates','soft','hard','all'],r:1}, value: {t:'string'} } },
-  set_view:            { desc: 'Set camera to a preset angle.', params: { view: {t:'string',e:['top','front','back','left','right','isometric','reset'],r:1} } },
-  set_render_style:    { desc: 'Change 3D rendering style.', params: { style: {t:'string',e:['wireframe','shaded','rendered','standard'],r:1} } },
-  set_section:         { desc: 'Add or clear section cut plane.', params: { axis: {t:'string',e:['x','y','z','none'],r:1} } },
-  color_by:            { desc: 'Color elements by property.', params: { by: {t:'string',e:['type','storey','discipline','material','none'],r:1} } },
-  set_theme:           { desc: 'Switch UI theme.', params: { theme: {t:'string',e:['dark','light'],r:1} } },
-  set_visibility:      { desc: 'Show or hide UI overlays.', params: { option: {t:'string',e:['grid','axes','markers'],r:1}, visible: {t:'boolean',r:1} } },
-  restore_visibility:  { desc: 'Restore all hidden/ghosted elements.', params: {} },
-  fly_to_clash:        { desc: 'Fly camera to a clash.', params: { clashIndex: {t:'number',r:1} } },
-  navigate_tab:        { desc: 'Switch to a UI tab.', params: { tab: {t:'string',e:['models','clashes','issues','navigator','ai'],r:1} } },
-  filter_clashes:      { desc: 'Filter the clash list.', params: { status: {t:'string',e:['open','resolved','all']}, priority: {t:'string',e:['critical','high','normal','low','all']} } },
-  sort_clashes:        { desc: 'Sort the clash list.', params: { sortBy: {t:'string',e:['priority','status','type','storey','date','distance'],r:1} } },
-  group_clashes:       { desc: 'Group clashes by category.', params: { groupBy: {t:'string',e:['storey','discipline','status','type','none'],r:1} } },
-  export_bcf:          { desc: 'Export clashes/issues as BCF.', params: { version: {t:'string',e:['2.1','3.0']} } },
-  create_project:      { desc: 'Create a new project.', params: { name: {t:'string',r:1} } },
-  switch_project:      { desc: 'Switch to a project by name.', params: { name: {t:'string',r:1} } },
-  measure:             { desc: 'Start or stop measurement mode.', params: { mode: {t:'string',e:['length','angle','area','stop','clear'],r:1} } },
-  walk_mode:           { desc: 'Enter or exit walk mode.', params: { enabled: {t:'boolean',r:1} } },
-};
+const { TOOLS, MCP_INSTRUCTIONS, registerMcpTools, registerMcpResources, registerMcpPrompts } = require('./tools.js');
 
 // ── REST API ──────────────────────────────────────────────────────
 
@@ -402,28 +376,11 @@ async function startMcpServer() {
   const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
   const { z } = require('zod');
 
-  const mcp = new McpServer({ name: 'ClashControl', version: VERSION });
+  const mcp = new McpServer({ name: 'ClashControl', version: VERSION }, { instructions: MCP_INSTRUCTIONS });
 
-  // Register all tools from the shared TOOLS definition
-  for (const [name, tool] of Object.entries(TOOLS)) {
-    const schema = {};
-    for (const [pn, pd] of Object.entries(tool.params)) {
-      if (pd.e) schema[pn] = pd.r ? z.enum(pd.e) : z.enum(pd.e).optional();
-      else if (pd.t === 'number') schema[pn] = pd.r ? z.number() : z.number().optional();
-      else if (pd.t === 'boolean') schema[pn] = pd.r ? z.boolean() : z.boolean().optional();
-      else schema[pn] = pd.r ? z.string() : z.string().optional();
-      if (pd.d && schema[pn].describe) schema[pn] = schema[pn].describe(pd.d);
-    }
-
-    mcp.tool(name, tool.desc, schema, async (params) => {
-      try {
-        const result = await sendToBrowser(name, params);
-        return { content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }] };
-      } catch (e) {
-        return { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true };
-      }
-    });
-  }
+  registerMcpTools(mcp, z, sendToBrowser);
+  registerMcpResources(mcp, sendToBrowser);
+  registerMcpPrompts(mcp, z);
 
   log('MCP server starting on stdio...');
   const transport = new StdioServerTransport();

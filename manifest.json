@@ -1,0 +1,48 @@
+{
+  "manifest_version": "0.4",
+  "type": "mcp_server",
+  "name": "clashcontrol-mcp",
+  "display_name": "ClashControl — BIM Clash Detection",
+  "version": "0.2.0",
+  "description": "Control ClashControl BIM clash detection directly from Claude.",
+  "long_description": "Connect Claude to ClashControl, a browser-based IFC clash detection tool. Load IFC models, run clash detection between disciplines, review and triage clash pairs, navigate the 3D view, and export BCF reports — all through natural conversation. Requires ClashControl to be open in your browser with the Smart Bridge addon enabled.",
+  "authors": [
+    { "name": "ClashControl", "url": "https://clashcontrol.io" }
+  ],
+  "repository": "https://github.com/clashcontrol-io/ClashControlSmartBridge",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/mcp-bundle.cjs"
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": { "node": ">=18.0.0" }
+  },
+  "tools": [
+    { "name": "get_status", "description": "Get loaded models, clash count, project, detection rules" },
+    { "name": "get_clashes", "description": "Get clash list with details" },
+    { "name": "get_issues", "description": "Get issues list" },
+    { "name": "run_detection", "description": "Run clash detection between model groups" },
+    { "name": "set_detection_rules", "description": "Update detection settings" },
+    { "name": "update_clash", "description": "Update a specific clash" },
+    { "name": "batch_update_clashes", "description": "Bulk update clashes by filter" },
+    { "name": "set_view", "description": "Set 3D camera preset" },
+    { "name": "set_render_style", "description": "Change rendering style" },
+    { "name": "set_section", "description": "Add or clear section cut plane" },
+    { "name": "color_by", "description": "Color elements by property" },
+    { "name": "set_theme", "description": "Switch UI theme" },
+    { "name": "set_visibility", "description": "Show or hide UI overlays" },
+    { "name": "restore_visibility", "description": "Restore all hidden elements" },
+    { "name": "fly_to_clash", "description": "Fly camera to a clash" },
+    { "name": "navigate_tab", "description": "Switch UI tab" },
+    { "name": "filter_clashes", "description": "Filter clash list" },
+    { "name": "sort_clashes", "description": "Sort clash list" },
+    { "name": "group_clashes", "description": "Group clashes by category" },
+    { "name": "export_bcf", "description": "Export clashes as BCF" },
+    { "name": "create_project", "description": "Create a new project" },
+    { "name": "switch_project", "description": "Switch to a project" },
+    { "name": "measure", "description": "Start or stop measurement mode" },
+    { "name": "walk_mode", "description": "Enter or exit walk mode" }
+  ],
+  "tools_generated": false
+}
