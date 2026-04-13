@@ -21,6 +21,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const { z } = require('zod');
 
 const VERSION = require('./package.json').version;
 const WS_PORT = 19802;
@@ -87,7 +90,18 @@ function getClaudeConfigPath() {
 
 function configureClaude() {
   const configPath = getClaudeConfigPath();
-  const binaryPath = process.pkg ? getInstallPath() : process.execPath;
+
+  // Determine the right command + args for Claude Desktop to spawn us
+  let command, args;
+  if (process.pkg) {
+    // Running as compiled binary — use the installed binary path directly
+    command = getInstallPath();
+    args = ['--mcp'];
+  } else {
+    // Running via node — use node + absolute path to this script
+    command = process.execPath;
+    args = [path.resolve(__dirname, 'smart-bridge.js'), '--mcp'];
+  }
 
   let config = {};
   try {
@@ -98,17 +112,14 @@ function configureClaude() {
 
   if (!config.mcpServers) config.mcpServers = {};
 
-  // Already configured — check if path still matches
+  // Already configured with the same command — skip
   if (config.mcpServers.clashcontrol) {
     const existing = config.mcpServers.clashcontrol;
-    if (existing.command === binaryPath) return; // already correct
+    if (existing.command === command) return;
   }
 
   // Add or update the clashcontrol entry
-  config.mcpServers.clashcontrol = {
-    command: binaryPath,
-    args: ['--mcp']
-  };
+  config.mcpServers.clashcontrol = { command, args };
 
   try {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -419,10 +430,6 @@ function startRestServer() {
 // ── MCP Server (Claude Desktop) ──────────────────────────────────
 
 async function startMcpServer() {
-  const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
-  const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-  const { z } = require('zod');
-
   const mcp = new McpServer({ name: 'ClashControl', version: VERSION }, { instructions: MCP_INSTRUCTIONS });
 
   registerMcpTools(mcp, z, sendToBrowser);

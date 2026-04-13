@@ -19,9 +19,14 @@
     "zod": "^3.25.0"
   },
   "pkg": {
+    "scripts": [
+      "node_modules/@modelcontextprotocol/sdk/**/*.js",
+      "node_modules/zod/**/*.js"
+    ],
     "assets": [
-      "node_modules/@modelcontextprotocol/sdk/**/*",
-      "node_modules/zod/**/*"
+      "node_modules/@modelcontextprotocol/sdk/**/*.json",
+      "node_modules/zod/**/*.json",
+      "tools.js"
     ]
   },
   "license": "MIT"
