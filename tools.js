@@ -180,4 +180,43 @@ const TOOLS = {
   },
 };
 
-module.exports = { TOOLS };
+// ── MCP Registration Helper ──────────────────────────────────────
+
+const MCP_INSTRUCTIONS =
+  'ClashControl is a BIM (Building Information Modeling) clash detection tool running in the browser. ' +
+  'Every tool call is relayed to the ClashControl web app via WebSocket — the browser must be open with the Smart Bridge addon enabled. ' +
+  'Typical workflow: (1) get_status to confirm connection and see loaded IFC models, ' +
+  '(2) run_detection to find clashes between discipline groups (e.g. structural vs MEP), ' +
+  '(3) get_clashes to review results, (4) fly_to_clash to inspect individual collisions, ' +
+  '(5) update_clash or batch_update_clashes to triage. ' +
+  'Hard clashes = physical intersections. Soft clashes = clearance violations within a gap tolerance (mm). ' +
+  'Always start with get_status to verify the browser is connected and models are loaded.';
+
+function registerMcpTools(mcp, z, sendToBrowser) {
+  for (const [name, tool] of Object.entries(TOOLS)) {
+    const schema = {};
+    for (const [pn, pd] of Object.entries(tool.params)) {
+      if (pd.e) schema[pn] = pd.r ? z.enum(pd.e) : z.enum(pd.e).optional();
+      else if (pd.t === 'number') schema[pn] = pd.r ? z.number() : z.number().optional();
+      else if (pd.t === 'boolean') schema[pn] = pd.r ? z.boolean() : z.boolean().optional();
+      else schema[pn] = pd.r ? z.string() : z.string().optional();
+      const paramDesc = pd.md || pd.d;
+      if (paramDesc && schema[pn].describe) schema[pn] = schema[pn].describe(paramDesc);
+    }
+
+    mcp.registerTool(name, {
+      description: tool.mcpDesc || tool.desc,
+      inputSchema: Object.keys(schema).length > 0 ? schema : undefined,
+      annotations: tool.annotations
+    }, async (params) => {
+      try {
+        const result = await sendToBrowser(name, params);
+        return { content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { content: [{ type: 'text', text: 'Error: ' + e.message }], isError: true };
+      }
+    });
+  }
+}
+
+module.exports = { TOOLS, MCP_INSTRUCTIONS, registerMcpTools };
