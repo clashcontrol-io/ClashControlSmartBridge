@@ -87,7 +87,18 @@ function getClaudeConfigPath() {
 
 function configureClaude() {
   const configPath = getClaudeConfigPath();
-  const binaryPath = process.pkg ? getInstallPath() : process.execPath;
+
+  // Determine the right command + args for Claude Desktop to spawn us
+  let command, args;
+  if (process.pkg) {
+    // Running as compiled binary — use the installed binary path directly
+    command = getInstallPath();
+    args = ['--mcp'];
+  } else {
+    // Running via node — use npx so it works without knowing the script path
+    command = 'npx';
+    args = ['-y', '@clashcontrol/mcp-server'];
+  }
 
   let config = {};
   try {
@@ -98,17 +109,14 @@ function configureClaude() {
 
   if (!config.mcpServers) config.mcpServers = {};
 
-  // Already configured — check if path still matches
+  // Already configured with the same command — skip
   if (config.mcpServers.clashcontrol) {
     const existing = config.mcpServers.clashcontrol;
-    if (existing.command === binaryPath) return; // already correct
+    if (existing.command === command) return;
   }
 
   // Add or update the clashcontrol entry
-  config.mcpServers.clashcontrol = {
-    command: binaryPath,
-    args: ['--mcp']
-  };
+  config.mcpServers.clashcontrol = { command, args };
 
   try {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
