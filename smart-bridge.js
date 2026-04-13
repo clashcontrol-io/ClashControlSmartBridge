@@ -73,6 +73,53 @@ function selfInstall() {
   }
 }
 
+// ── Auto-configure Claude Desktop ────────────────────────────────
+// On first run, add ClashControl to Claude Desktop's MCP config
+// so the user never needs to edit JSON manually.
+
+function getClaudeConfigPath() {
+  if (process.platform === 'win32')
+    return path.join(process.env.APPDATA || os.homedir(), 'Claude', 'claude_desktop_config.json');
+  if (process.platform === 'darwin')
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  return path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json');
+}
+
+function configureClaude() {
+  const configPath = getClaudeConfigPath();
+  const binaryPath = process.pkg ? getInstallPath() : process.execPath;
+
+  let config = {};
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (e) {
+    // File doesn't exist or isn't valid JSON — we'll create it
+  }
+
+  if (!config.mcpServers) config.mcpServers = {};
+
+  // Already configured — check if path still matches
+  if (config.mcpServers.clashcontrol) {
+    const existing = config.mcpServers.clashcontrol;
+    if (existing.command === binaryPath) return; // already correct
+  }
+
+  // Add or update the clashcontrol entry
+  config.mcpServers.clashcontrol = {
+    command: binaryPath,
+    args: ['--mcp']
+  };
+
+  try {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    log('Claude Desktop configured: ' + configPath);
+    log('Restart Claude Desktop to activate ClashControl tools.');
+  } catch (e) {
+    log('Could not configure Claude Desktop: ' + e.message);
+  }
+}
+
 // ── Auto-updater ──────────────────────────────────────────────────
 // Only active when running as a compiled pkg binary.
 
@@ -392,6 +439,7 @@ async function startMcpServer() {
 
 async function main() {
   selfInstall();
+  configureClaude();
   checkAndUpdate();
 
   startWsBridge();
