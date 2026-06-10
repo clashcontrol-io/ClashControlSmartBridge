@@ -1,3 +1,12 @@
+> [!WARNING]
+> **This repository is superseded.** Smart Bridge development moved into the main
+> [ClashControl repository](https://github.com/clashcontrol-io/ClashControl)
+> (`smart-bridge-server.js` + `mcp-server.js`) in v0.3.0, which added the
+> one-click local-LLM autodetect (Ollama / LM Studio / llama.cpp / Jan) and the
+> own-LLM agent loop. **Download the current Connector from the
+> [ClashControl releases](https://github.com/clashcontrol-io/ClashControl/releases)**
+> (tags `bridge-v*`). The code here stops at v0.2.3 and no longer receives fixes.
+
 # ClashControl Smart Bridge
 
 **LLM bridge connecting Claude, ChatGPT, or any AI assistant to BIM clash detection.**
