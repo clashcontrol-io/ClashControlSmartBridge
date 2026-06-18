@@ -246,6 +246,8 @@ The REST server starts on port `19803` by default (configurable via the `PORT` e
 | WebSocket bridge (browser ↔ bridge) | `19802` | No |
 | REST API | `19803` | Yes — `PORT` env var |
 
+Both services bind to **both loopback addresses** — IPv4 `127.0.0.1` and IPv6 `[::1]` — so they're reachable regardless of how `localhost` resolves on the host (Windows in particular often resolves `localhost` to `[::1]` first). The bridge never binds the wildcard (`0.0.0.0` / `::`), so it is **never exposed to the LAN, Wi-Fi, or VPN** — strictly localhost-only. If one address family is unavailable (e.g. IPv6 disabled), the bridge logs a notice and continues serving on the other.
+
 ```bash
 PORT=8080 clashcontrol-smart-bridge
 ```
@@ -276,6 +278,9 @@ Outputs to `dist/`:
 
 **Port 19802 already in use**
 - If another instance of the bridge is already running, new instances automatically connect to the existing WebSocket server instead of starting a new one. This is normal when running both MCP and REST modes simultaneously.
+
+**`ECONNREFUSED` connecting to the bridge**
+- The bridge binds both `127.0.0.1` and `[::1]`, so this should not happen on a healthy host. If you see it, confirm the bridge is running and that no firewall is blocking loopback traffic on `19802`/`19803`.
 
 **Claude Desktop doesn't see the tools**
 - Verify the path in `claude_desktop_config.json` is correct
