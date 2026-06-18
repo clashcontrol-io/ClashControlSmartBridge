@@ -21,39 +21,49 @@ const { TOOLS, MCP_INSTRUCTIONS, registerMcpTools, registerMcpResources, registe
 const VERSION = require('./package.json').version;
 const WS_PORT = 19802;
 const REQUEST_TIMEOUT = 15000; // 15s for browser to respond
+// Bind both loopback addresses explicitly (IPv4 + IPv6) so clients reach us
+// whether `localhost` resolves to 127.0.0.1 or [::1]. Never bind the wildcard
+// (0.0.0.0 / ::) — that would expose the bridge to the LAN/Wi-Fi/VPN.
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1'];
 
 // ── WebSocket bridge to browser ───────────────────────────────────
 
-let wss = null;
+let wssServers = [];
 let browserSocket = null;
 let pendingRequests = new Map(); // id → {resolve, reject, timer}
 let requestId = 0;
 
+function handleBrowserMessage(data) {
+  try {
+    const msg = JSON.parse(data.toString());
+    if (msg.id != null && pendingRequests.has(msg.id)) {
+      const req = pendingRequests.get(msg.id);
+      clearTimeout(req.timer);
+      pendingRequests.delete(msg.id);
+      req.resolve(msg.result);
+    }
+  } catch (e) {
+    process.stderr.write('[Smart Bridge MCP] Bad message: ' + e.message + '\n');
+  }
+}
+
 function startWsBridge() {
-  wss = new WebSocket.Server({ port: WS_PORT, host: '127.0.0.1' });
-  wss.on('connection', (ws) => {
-    browserSocket = ws;
-    process.stderr.write('[Smart Bridge MCP] Browser connected\n');
-    ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.id != null && pendingRequests.has(msg.id)) {
-          const req = pendingRequests.get(msg.id);
-          clearTimeout(req.timer);
-          pendingRequests.delete(msg.id);
-          req.resolve(msg.result);
-        }
-      } catch (e) {
-        process.stderr.write('[Smart Bridge MCP] Bad message: ' + e.message + '\n');
-      }
+  wssServers = LOOPBACK_HOSTS.map((host) => {
+    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    wss.on('connection', (ws) => {
+      browserSocket = ws;
+      process.stderr.write('[Smart Bridge MCP] Browser connected\n');
+      ws.on('message', handleBrowserMessage);
+      ws.on('close', () => {
+        browserSocket = null;
+        process.stderr.write('[Smart Bridge MCP] Browser disconnected\n');
+      });
     });
-    ws.on('close', () => {
-      browserSocket = null;
-      process.stderr.write('[Smart Bridge MCP] Browser disconnected\n');
+    wss.on('error', (err) => {
+      // One loopback may be unavailable (e.g. IPv6 disabled) — keep the other.
+      process.stderr.write('[Smart Bridge MCP] WebSocket error on ' + host + ': ' + err.message + '\n');
     });
-  });
-  wss.on('error', (err) => {
-    process.stderr.write('[Smart Bridge MCP] WebSocket error: ' + err.message + '\n');
+    return wss;
   });
 }
 
@@ -85,7 +95,7 @@ registerMcpPrompts(server, z);
 
 async function main() {
   startWsBridge();
-  process.stderr.write('[Smart Bridge MCP] WebSocket bridge on ws://127.0.0.1:' + WS_PORT + '\n');
+  process.stderr.write('[Smart Bridge MCP] WebSocket bridge on ws://127.0.0.1:' + WS_PORT + ' and ws://[::1]:' + WS_PORT + '\n');
   process.stderr.write('[Smart Bridge MCP] Waiting for Claude to connect via stdio...\n');
   const transport = new StdioServerTransport();
   await server.connect(transport);

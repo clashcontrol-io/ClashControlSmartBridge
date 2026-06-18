@@ -20,44 +20,54 @@ const WebSocket = require('ws');
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const WS_PORT = 19802;
 const REQUEST_TIMEOUT = 15000;
+// Bind both loopback addresses explicitly (IPv4 + IPv6) so clients reach us
+// whether `localhost` resolves to 127.0.0.1 or [::1]. Never bind the wildcard
+// (0.0.0.0 / ::) — that would expose the bridge to the LAN/Wi-Fi/VPN.
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1'];
 
 // ── WebSocket bridge to browser ───────────────────────────────────
 
-let wss = null;
+let wssServers = [];
 let browserSocket = null;
 let pendingRequests = new Map();
 let requestId = 0;
+let clientFallbackStarted = false;
+
+function handleBrowserMessage(data) {
+  try {
+    const msg = JSON.parse(data.toString());
+    if (msg.id != null && pendingRequests.has(msg.id)) {
+      const req = pendingRequests.get(msg.id);
+      clearTimeout(req.timer);
+      pendingRequests.delete(msg.id);
+      req.resolve(msg.result);
+    }
+  } catch (e) {
+    console.error('[Smart Bridge REST] Bad WS message:', e.message);
+  }
+}
 
 function startWsBridge() {
-  wss = new WebSocket.Server({ port: WS_PORT, host: '127.0.0.1' });
-  wss.on('connection', (ws) => {
-    browserSocket = ws;
-    console.log('[Smart Bridge REST] Browser connected via WebSocket');
-    ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.id != null && pendingRequests.has(msg.id)) {
-          const req = pendingRequests.get(msg.id);
-          clearTimeout(req.timer);
-          pendingRequests.delete(msg.id);
-          req.resolve(msg.result);
-        }
-      } catch (e) {
-        console.error('[Smart Bridge REST] Bad WS message:', e.message);
+  wssServers = LOOPBACK_HOSTS.map((host) => {
+    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    wss.on('connection', (ws) => {
+      browserSocket = ws;
+      console.log('[Smart Bridge REST] Browser connected via WebSocket');
+      ws.on('message', handleBrowserMessage);
+      ws.on('close', () => {
+        browserSocket = null;
+        console.log('[Smart Bridge REST] Browser disconnected');
+      });
+    });
+    wss.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log('[Smart Bridge REST] WebSocket port ' + WS_PORT + ' in use on ' + host + ' (MCP server running?) — connecting as client instead');
+        if (!clientFallbackStarted) { clientFallbackStarted = true; connectAsClient(); }
+      } else {
+        console.error('[Smart Bridge REST] WebSocket error on ' + host + ':', err.message);
       }
     });
-    ws.on('close', () => {
-      browserSocket = null;
-      console.log('[Smart Bridge REST] Browser disconnected');
-    });
-  });
-  wss.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.log('[Smart Bridge REST] WebSocket port ' + WS_PORT + ' in use (MCP server running?) — connecting as client instead');
-      connectAsClient();
-    } else {
-      console.error('[Smart Bridge REST] WebSocket error:', err.message);
-    }
+    return wss;
   });
 }
 
@@ -326,7 +336,7 @@ function parseBody(req) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+const requestHandler = async (req, res) => {
   // CORS headers (allow ChatGPT and other origins)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -422,16 +432,23 @@ curl -X POST http://localhost:${REST_PORT}/call/set_view -H "Content-Type: appli
   }
 
   json(404, { error: 'Not found' });
-});
+};
 
 // ── Start ─────────────────────────────────────────────────────────
 
 startWsBridge();
-server.listen(REST_PORT, '127.0.0.1', () => {
-  console.log('[ClashControl Smart Bridge] LLM bridge for Claude, ChatGPT, and more');
-  console.log('  HTTP API:    http://127.0.0.1:' + REST_PORT);
-  console.log('  OpenAPI:     http://127.0.0.1:' + REST_PORT + '/openapi.json');
-  console.log('  WebSocket:   ws://127.0.0.1:' + WS_PORT);
-  console.log('');
-  console.log('  Waiting for ClashControl browser to connect...');
+console.log('[ClashControl Smart Bridge] LLM bridge for Claude, ChatGPT, and more');
+LOOPBACK_HOSTS.forEach((host) => {
+  const display = host.includes(':') ? '[' + host + ']' : host;
+  const server = http.createServer(requestHandler);
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') console.error('[Smart Bridge REST] REST port ' + REST_PORT + ' in use on ' + display + ' — another instance already running?');
+    else console.error('[Smart Bridge REST] HTTP server error on ' + display + ':', err.message);
+  });
+  server.listen(REST_PORT, host, () => {
+    console.log('  HTTP API:    http://' + display + ':' + REST_PORT + '  (OpenAPI: /openapi.json)');
+  });
 });
+console.log('  WebSocket:   ws://127.0.0.1:' + WS_PORT + ' and ws://[::1]:' + WS_PORT);
+console.log('');
+console.log('  Waiting for ClashControl browser to connect...');

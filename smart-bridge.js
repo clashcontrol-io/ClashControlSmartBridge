@@ -29,6 +29,10 @@ const VERSION = require('./package.json').version;
 const WS_PORT = 19802;
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const REQUEST_TIMEOUT = 15000;
+// Bind both loopback addresses explicitly (IPv4 + IPv6) so clients reach us
+// whether `localhost` resolves to 127.0.0.1 or [::1]. Never bind the wildcard
+// (0.0.0.0 / ::) — that would expose the bridge to the LAN/Wi-Fi/VPN.
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1'];
 const MCP_MODE = process.argv.includes('--mcp');
 
 // ── Self-installer ────────────────────────────────────────────────
@@ -237,41 +241,47 @@ async function applyUpdate() {
 
 // ── WebSocket bridge to browser ───────────────────────────────────
 
-let wss = null;
+let wssServers = [];
 let browserSocket = null;
 let pendingRequests = new Map();
 let requestId = 0;
+let clientFallbackStarted = false;
+
+function handleBrowserMessage(data) {
+  try {
+    const msg = JSON.parse(data.toString());
+    if (msg.id != null && pendingRequests.has(msg.id)) {
+      const req = pendingRequests.get(msg.id);
+      clearTimeout(req.timer);
+      pendingRequests.delete(msg.id);
+      req.resolve(msg.result);
+    }
+  } catch (e) {
+    log('Bad WS message: ' + e.message);
+  }
+}
 
 function startWsBridge() {
-  wss = new WebSocket.Server({ port: WS_PORT, host: '127.0.0.1' });
-  wss.on('connection', (ws) => {
-    browserSocket = ws;
-    log('Browser connected via WebSocket');
-    ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.id != null && pendingRequests.has(msg.id)) {
-          const req = pendingRequests.get(msg.id);
-          clearTimeout(req.timer);
-          pendingRequests.delete(msg.id);
-          req.resolve(msg.result);
-        }
-      } catch (e) {
-        log('Bad WS message: ' + e.message);
+  wssServers = LOOPBACK_HOSTS.map((host) => {
+    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    wss.on('connection', (ws) => {
+      browserSocket = ws;
+      log('Browser connected via WebSocket');
+      ws.on('message', handleBrowserMessage);
+      ws.on('close', () => {
+        browserSocket = null;
+        log('Browser disconnected');
+      });
+    });
+    wss.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        log('WebSocket port ' + WS_PORT + ' in use on ' + host + ' — connecting as client');
+        if (!clientFallbackStarted) { clientFallbackStarted = true; connectWsAsClient(); }
+      } else {
+        log('WebSocket error on ' + host + ': ' + err.message);
       }
     });
-    ws.on('close', () => {
-      browserSocket = null;
-      log('Browser disconnected');
-    });
-  });
-  wss.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      log('WebSocket port ' + WS_PORT + ' in use — connecting as client');
-      connectWsAsClient();
-    } else {
-      log('WebSocket error: ' + err.message);
-    }
+    return wss;
   });
 }
 
@@ -359,7 +369,7 @@ function parseBody(req) {
 }
 
 function startRestServer() {
-  const srv = http.createServer(async (req, res) => {
+  const requestHandler = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -415,15 +425,18 @@ function startRestServer() {
       return;
     }
     json(404, { error: 'Not found' });
-  });
+  };
 
-  srv.listen(REST_PORT, '127.0.0.1', () => {
-    log('REST API:  http://127.0.0.1:' + REST_PORT);
-    log('OpenAPI:   http://127.0.0.1:' + REST_PORT + '/openapi.json');
-  });
-  srv.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') log('REST port ' + REST_PORT + ' in use — another instance is already running.');
-    else log('REST server error: ' + err.message);
+  LOOPBACK_HOSTS.forEach((host) => {
+    const display = host.includes(':') ? '[' + host + ']' : host;
+    const srv = http.createServer(requestHandler);
+    srv.listen(REST_PORT, host, () => {
+      log('REST API:  http://' + display + ':' + REST_PORT + '  (OpenAPI: /openapi.json)');
+    });
+    srv.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') log('REST port ' + REST_PORT + ' in use on ' + display + ' — another instance is already running.');
+      else log('REST server error on ' + display + ': ' + err.message);
+    });
   });
 }
 
@@ -450,7 +463,7 @@ async function main() {
   checkAndUpdate();
 
   startWsBridge();
-  log('WebSocket:  ws://127.0.0.1:' + WS_PORT);
+  log('WebSocket:  ws://127.0.0.1:' + WS_PORT + ' and ws://[::1]:' + WS_PORT);
 
   // Always start REST (doesn't use stdio)
   startRestServer();
