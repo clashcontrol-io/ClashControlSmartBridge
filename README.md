@@ -6,8 +6,10 @@
 > own-LLM agent loop. **Download the current Connector from the
 > [ClashControl releases](https://github.com/clashcontrol-io/ClashControl/releases)**
 > (tags `bridge-v*`). The code here stops at v0.2.5 (its final release) and no
-> longer receives fixes — the release automation in `.github/workflows/` has
-> been disabled so this repository cannot publish again.
+> longer receives fixes — the release automation in `.github/workflows/` no
+> longer runs automatically (its push/pull_request triggers were removed;
+> only a manual `workflow_dispatch` run remains, for a maintainer to use in
+> a genuine emergency).
 
 # ClashControl Smart Bridge
 
