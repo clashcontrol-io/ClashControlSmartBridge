@@ -1,10 +1,15 @@
 name: Bump Version
 
+# This repository is retired/superseded (see README.md) -- Smart Bridge
+# development moved into the main ClashControl repo in v0.3.0. The
+# automatic pull_request trigger below is disabled on purpose so this repo
+# can never publish another version bump; the workflow file is kept (not
+# deleted) so its history stays intact. workflow_dispatch is the standard
+# no-op placeholder for "this workflow never fires on its own" -- the job's
+# own `if: github.event.pull_request.merged == true` guard also means a
+# manual dispatch wouldn't actually run the bump step either.
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: write

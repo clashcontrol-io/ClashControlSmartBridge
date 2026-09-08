@@ -1,9 +1,13 @@
 name: Release
 
+# This repository is retired/superseded (see README.md) -- Smart Bridge
+# development moved into the main ClashControl repo in v0.3.0. The
+# automatic trigger below is disabled on purpose so this repo can never cut
+# another release; the workflow file is kept (not deleted) so its history
+# stays intact. workflow_dispatch is left in only so a maintainer could
+# still run it by hand in a genuine emergency -- it never fires on its own.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
