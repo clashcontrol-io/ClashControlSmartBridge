@@ -21,6 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const security = require('./bridge-security');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
@@ -263,7 +264,7 @@ function handleBrowserMessage(data) {
 
 function startWsBridge() {
   wssServers = LOOPBACK_HOSTS.map((host) => {
-    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    const wss = new WebSocket.Server({ port: WS_PORT, host, verifyClient: security.verifyWsClient });
     wss.on('connection', (ws) => {
       browserSocket = ws;
       log('Browser connected via WebSocket');
@@ -370,10 +371,10 @@ function parseBody(req) {
 
 function startRestServer() {
   const requestHandler = async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    // Host + exact-Origin allow-list + pairing token + PNA preflight (see
+    // bridge-security.js). Replaces the old wildcard CORS ('*'), which let any
+    // website drive the bridge through the visitor's browser.
+    if (!security.gateHttp(req, res)) return;
 
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname;

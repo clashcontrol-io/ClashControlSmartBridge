@@ -10,6 +10,18 @@
 > longer runs automatically (its push/pull_request triggers were removed;
 > only a manual `workflow_dispatch` run remains, for a maintainer to use in
 > a genuine emergency).
+>
+> [!CAUTION]
+> **Security (localhost bridge):** versions up to and including the published
+> v0.2.5 binaries answered every origin (`Access-Control-Allow-Origin: *`) and
+> accepted any WebSocket client, so a malicious website open in another tab
+> could drive the bridge through your browser. The source in this repository
+> now enforces an exact `Origin` allow-list (`https://www.clashcontrol.io`),
+> a loopback-only `Host`, Chromium Private Network Access preflights, and a
+> short-lived pairing token — but **no new binary has been published from it**.
+> If you still run a v0.2.x binary, replace it with the current Connector from
+> the [ClashControl releases](https://github.com/clashcontrol-io/ClashControl/releases)
+> (tags `bridge-v*`), which has the same protections.
 
 # ClashControl Smart Bridge
 
