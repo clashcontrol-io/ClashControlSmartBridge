@@ -15,6 +15,7 @@ const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
 const WebSocket = require('ws');
+const security = require('./bridge-security');
 
 const { TOOLS, MCP_INSTRUCTIONS, registerMcpTools, registerMcpResources, registerMcpPrompts } = require('./tools.js');
 
@@ -49,7 +50,7 @@ function handleBrowserMessage(data) {
 
 function startWsBridge() {
   wssServers = LOOPBACK_HOSTS.map((host) => {
-    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    const wss = new WebSocket.Server({ port: WS_PORT, host, verifyClient: security.verifyWsClient });
     wss.on('connection', (ws) => {
       browserSocket = ws;
       process.stderr.write('[Smart Bridge MCP] Browser connected\n');

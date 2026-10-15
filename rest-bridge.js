@@ -16,6 +16,7 @@
 
 const http = require('http');
 const WebSocket = require('ws');
+const security = require('./bridge-security');
 
 const REST_PORT = parseInt(process.env.PORT, 10) || 19803;
 const WS_PORT = 19802;
@@ -49,7 +50,7 @@ function handleBrowserMessage(data) {
 
 function startWsBridge() {
   wssServers = LOOPBACK_HOSTS.map((host) => {
-    const wss = new WebSocket.Server({ port: WS_PORT, host });
+    const wss = new WebSocket.Server({ port: WS_PORT, host, verifyClient: security.verifyWsClient });
     wss.on('connection', (ws) => {
       browserSocket = ws;
       console.log('[Smart Bridge REST] Browser connected via WebSocket');
@@ -337,16 +338,10 @@ function parseBody(req) {
 }
 
 const requestHandler = async (req, res) => {
-  // CORS headers (allow ChatGPT and other origins)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
+  // Host + exact-Origin allow-list + pairing token + PNA preflight (see
+  // bridge-security.js). Replaces the old wildcard CORS ('*'), which let any
+  // website drive the bridge through the visitor's browser.
+  if (!security.gateHttp(req, res)) return;
 
   const url = new URL(req.url, 'http://localhost');
   const path = url.pathname;
